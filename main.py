@@ -69,14 +69,72 @@ def parse_csp(csp_string):
 
     return csp_dict
 
-# Example usage
-url = 'https://translate.google.com/'
-csp_string = fetch_csp(url)
-csp_dict =[]
-if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
-    csp_dict = parse_csp(csp_string)
-    print(csp_dict)  # Access values for 'script-src'
-else:
-    print(csp_string)
+def script_src_check(script_src_values, issues):
+    """
+    Checks for common misconfigurations in the 'script-src' directive of CSP.
+    If 'strict-dynamic' is present, skips other source checks but still checks for 'unsafe-eval'.
 
+    Args:
+        script_src_values (list): A list of sources specified in the 'script-src' directive.
 
+    Returns:
+        list: A list of strings describing any misconfigurations found.
+    """
+
+    # Check for strict-dynamic first; if present, note its presence and skip other source checks
+    if "'strict-dynamic'" in script_src_values:
+        issues.append("Contains 'strict-dynamic' - other source expressions are ignored, relying only on trusted dynamic scripts.")
+    
+    # Check for 'unsafe-eval' regardless of 'strict-dynamic'
+    if "'unsafe-eval'" in script_src_values:
+        issues.append("Contains 'unsafe-eval' - allows the use of eval() and similar methods, which can be exploited for XSS.")
+
+    # If strict-dynamic is present, skip checks for wildcard (*), self, and other host sources
+    if "'strict-dynamic'" not in script_src_values:
+        # Check for wildcard (*)
+        if '*' in script_src_values:
+            issues.append("Contains wildcard '*' - allows scripts from any source, reducing security.")
+        
+        # Check for 'unsafe-inline'
+        if "'unsafe-inline'" in script_src_values:
+            issues.append("Contains 'unsafe-inline' - allows inline scripts, making it vulnerable to XSS attacks.")
+        
+        # Check for overly broad HTTPS source (e.g., 'https:' without specifying a domain)
+        if any(source == 'https:' for source in script_src_values):
+            issues.append("Contains broad 'https:' source - allows scripts from any HTTPS domain, which may introduce risks.")
+        
+        # Check if hashes are present and flag if combined with 'unsafe-inline'
+        has_hashes = any(source.startswith("sha") for source in script_src_values)
+        if has_hashes and "'unsafe-inline'" in script_src_values:
+            issues.append("Combines 'unsafe-inline' with script hashes - 'unsafe-inline' overrides the security benefits of hashes.")
+        
+        # Check if self is allowed and flag it (self is generally okay but worth noting)
+        if "'self'" in script_src_values:
+            issues.append("Contains 'self' - allows scripts from the same origin, generally safe but can be exploited if the site is compromised.")
+        
+        # General warning for any host URLs (http:// or https://)
+        url_pattern = re.compile(r'^https?://[^\s]+')
+        if any(url_pattern.match(source) for source in script_src_values):
+            issues.append("Contains host URLs - ensure that no URLs in the 'script-src' serve JSONP responses or Angular libraries to prevent potential security risks.")
+    
+    return issues
+    
+def main():
+
+    url = 'https://developer.mozilla.org/'
+    issues = []
+    csp_string = fetch_csp(url)
+    csp_dict =[]
+    if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
+        csp_dict = parse_csp(csp_string)
+        if 'script-src' in csp_dict:
+            script_src_values = csp_dict['script-src']
+            print(script_src_values) 
+            script_src_check(script_src_values, issues)
+            print(issues)
+    else:
+        issues.append(csp_string)
+        print(issues)
+
+if __name__ == "__main__":
+    main()
