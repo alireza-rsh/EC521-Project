@@ -96,21 +96,24 @@ def script_src_check(script_src_values, issues):
             issues.append("Contains wildcard '*' - allows scripts from any source, reducing security.")
         
         # Check for 'unsafe-inline'
+        has_hashes = any(source.startswith("sha") for source in script_src_values)
+        has_nonce = any(src.startswith("nonce-") for src in script_src_values)
         if "'unsafe-inline'" in script_src_values:
-            issues.append("Contains 'unsafe-inline' - allows inline scripts, making it vulnerable to XSS attacks.")
-        
+            if has_hashes or has_nonce:
+                issues.append("unsafe-inline is ignored if a nonce or a hash is present.")
+            else:
+                issues.append("Contains 'unsafe-inline' - allows inline scripts, making it vulnerable to XSS attacks.")
+
         # Check for overly broad HTTPS source (e.g., 'https:' without specifying a domain)
         if any(source == 'https:' for source in script_src_values):
             issues.append("Contains broad 'https:' source - allows scripts from any HTTPS domain, which may introduce risks.")
         
         # Check if hashes are present and flag if combined with 'unsafe-inline'
-        has_hashes = any(source.startswith("sha") for source in script_src_values)
-        if has_hashes and "'unsafe-inline'" in script_src_values:
-            issues.append("Combines 'unsafe-inline' with script hashes - 'unsafe-inline' overrides the security benefits of hashes.")
+        
         
         # Check if self is allowed and flag it (self is generally okay but worth noting)
         if "'self'" in script_src_values:
-            issues.append("Contains 'self' - allows scripts from the same origin, generally safe but can be exploited if the site is compromised.")
+            issues.append("Contains 'self' - allows scripts from the same origin, generally safe but can be exploited if there is no restriction for File Uploads.")
         
         # General warning for any host URLs (http:// or https://)
         url_pattern = re.compile(r'^https?://[^\s]+')
@@ -119,6 +122,86 @@ def script_src_check(script_src_values, issues):
     
     return issues
     
+def object_src_check(object_src_values, issues):
+    """
+    Checks for common misconfigurations in the 'object-src' directive of CSP.
+
+    Args:
+        object_src_values (list): A list of sources specified in the 'object-src' directive.
+        issues (list): List to append any identified issues.
+    """
+    # 1. Prefer 'none' to disallow all object sources
+    if 'none' not in object_src_values:
+        issues.append("object-src: Should be set to 'none' to prevent loading of plugins and other objects that can be exploited.")
+
+    # 2. Check for wildcard '*' which allows objects from any source
+    if '*' in object_src_values:
+        issues.append("object-src: Contains wildcard '*' - allows objects from any source, increasing the risk of XSS.")
+
+    # 3. Check for specific potentially dangerous sources
+    dangerous_sources = ['data:', 'blob:']
+    for src in object_src_values:
+        if src in dangerous_sources:
+            issues.append(f"object-src: Contains dangerous source '{src}' - can be exploited to execute malicious objects.")
+
+    # 4. Check for protocol-relative URLs (e.g., //example.com)
+    url_pattern = re.compile(r'^https?://[^\s]+')
+    if any(url_pattern.match(source) for source in object_src_values):
+        issues.append(f"object-src: Contains protocol-relative URL '{src}' - can lead to loading objects over unintended protocols.")
+
+    # 5. Warn if 'self' is allowed, as it permits objects from the same origin
+    if 'self' in object_src_values:
+        issues.append("object-src: Contains 'self' - allows objects from the same origin, which can be exploited if there is no restriction for File Uploads.")
+
+def img_src_check(img_src_values, issues):
+    """
+    Checks for common misconfigurations in the 'img-src' directive of CSP.
+
+    Args:
+        img_src_values (list): A list of sources specified in the 'img-src' directive.
+        issues (list): List to append any identified issues.
+    """
+
+    # 1. Check for wildcard '*' which allows images from any source
+    if '*' in img_src_values:
+        issues.append("img-src: Contains wildcard '*' - allows images from any source, which can be exploited for data exfiltration.")
+
+    # 2. Check for dangerous schemes
+    dangerous_schemes = ['data:', 'blob:']
+    for src in img_src_values:
+        if src in dangerous_schemes:
+            issues.append(f"img-src: Contains dangerous scheme '{src}' - can be exploited to embed arbitrary images and compromise content integrity.")
+
+def media_src_check(media_src_values, issues):
+    """
+    Checks for common misconfigurations in the 'media-src' directive of CSP.
+
+    Args:
+        media_src_values (list): A list of sources specified in the 'media-src' directive.
+        issues (list): List to append any identified issues.
+    """
+    # 1. Check for wildcard '*' which allows media from any source
+    if '*' in media_src_values:
+        issues.append("media-src: Contains wildcard '*' - allows media from any source, which can be exploited for data exfiltration.")
+
+    # 2. Check for dangerous schemes
+    dangerous_schemes = ['data:', 'blob:']
+    for src in media_src_values:
+        if src in dangerous_schemes:
+            issues.append(f"media-src: Contains dangerous scheme '{src}' - can be exploited to embed arbitrary media and compromise content integrity.")
+
+def base_uri_check(base_uri_values, issues):
+    """
+    Checks for common misconfigurations in the 'base-uri' directive of CSP.
+
+    Args:
+        base_uri_values (list): A list of sources specified in the 'base-uri' directive.
+        issues (list): List to append any identified issues.
+    """
+    # 1. Check for wildcard '*' which allows any base URI
+    if '*' in base_uri_values:
+        issues.append("base-uri: Contains wildcard '*' - allows the base URI to be set to any origin, increasing the risk of malicious resource loading.")
+
 def main():
 
     url = 'https://developer.mozilla.org/'
@@ -131,6 +214,26 @@ def main():
             script_src_values = csp_dict['script-src']
             print(script_src_values) 
             script_src_check(script_src_values, issues)
+            print(issues)
+        if 'object-src' in csp_dict:
+            object_src_values = csp_dict['object-src']
+            print(object_src_values) 
+            object_src_check(object_src_values, issues)
+            print(issues)
+        if 'img_src' in csp_dict:
+            img_src_values = csp_dict['img_src']
+            print(img_src_values) 
+            img_src_check(img_src_values, issues)
+            print(issues)
+        if 'media_src' in csp_dict:
+            media_src_values = csp_dict['media_src']
+            print(media_src_values) 
+            media_src_check(media_src_values, issues)
+            print(issues)
+        if 'base_uri' in csp_dict:
+            base_uri_values = csp_dict['base_uri']
+            print(base_uri_values) 
+            base_uri_check(base_uri_values, issues)
             print(issues)
     else:
         issues.append(csp_string)
