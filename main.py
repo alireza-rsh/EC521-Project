@@ -1,4 +1,5 @@
 import requests
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import re
 
@@ -202,42 +203,57 @@ def base_uri_check(base_uri_values, issues):
     if '*' in base_uri_values:
         issues.append("base-uri: Contains wildcard '*' - allows the base URI to be set to any origin, increasing the risk of malicious resource loading.")
 
-def main():
+def get_csp_evals(url_list):
+    csp_eval = dict()
+    for url in url_list:
+        issues = []
+        csp_string = fetch_csp(url)
+        csp_dict =[]
+        if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
+            csp_dict = parse_csp(csp_string)
+            if 'script-src' in csp_dict:
+                script_src_values = csp_dict['script-src']
+                script_src_check(script_src_values, issues)
+            if 'object-src' in csp_dict:
+                object_src_values = csp_dict['object-src']
+                object_src_check(object_src_values, issues)
+            if 'img_src' in csp_dict:
+                img_src_values = csp_dict['img_src']
+                img_src_check(img_src_values, issues)
+            if 'media_src' in csp_dict:
+                media_src_values = csp_dict['media_src']
+                media_src_check(media_src_values, issues)
+            if 'base_uri' in csp_dict:
+                base_uri_values = csp_dict['base_uri']
+                base_uri_check(base_uri_values, issues)
+        else:
+            issues.append(csp_string)
+        csp_eval[url] = issues
+    return csp_eval
 
-    url = 'https://developer.mozilla.org/'
-    issues = []
-    csp_string = fetch_csp(url)
-    csp_dict =[]
-    if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
-        csp_dict = parse_csp(csp_string)
-        if 'script-src' in csp_dict:
-            script_src_values = csp_dict['script-src']
-            print(script_src_values) 
-            script_src_check(script_src_values, issues)
-            print(issues)
-        if 'object-src' in csp_dict:
-            object_src_values = csp_dict['object-src']
-            print(object_src_values) 
-            object_src_check(object_src_values, issues)
-            print(issues)
-        if 'img_src' in csp_dict:
-            img_src_values = csp_dict['img_src']
-            print(img_src_values) 
-            img_src_check(img_src_values, issues)
-            print(issues)
-        if 'media_src' in csp_dict:
-            media_src_values = csp_dict['media_src']
-            print(media_src_values) 
-            media_src_check(media_src_values, issues)
-            print(issues)
-        if 'base_uri' in csp_dict:
-            base_uri_values = csp_dict['base_uri']
-            print(base_uri_values) 
-            base_uri_check(base_uri_values, issues)
-            print(issues)
-    else:
-        issues.append(csp_string)
-        print(issues)
+def main():
+    # List of URLs to check, this should be done automatically by fetching the top N most visited sites
+    url_list = [
+        "https://google.com",
+        "https://youtube.com",
+        "https://facebook.com",
+        "https://instagram.com",
+        "https://whatsapp.com",
+        "https://x.com",
+        "https://wikipedia.org",
+        "https://reddit.com",
+        "https://yahoo.com",
+        "https://amazon.com"
+        ]
+
+    survey = get_csp_evals(url_list)
+    issue_count = 0
+    for url in survey.keys():
+        print(url, survey[url])
+        issue_count += len(survey[url])
+    
+    average_issues_per_site = issue_count / len(url_list)
+    print("Average # of vulns per site: ", average_issues_per_site)
 
 if __name__ == "__main__":
     main()
