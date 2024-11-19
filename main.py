@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 from collections import OrderedDict
 import re
+
 def fetch_csp(url):
     """
     Fetches the Content Security Policy from the headers or meta tag of a URL.
@@ -244,21 +245,25 @@ def is_valid_url(url):
     except ValueError:
         return False
 
-def get_links(url):
+
+def get_links(url, tag_class=None):
     """
     returns a list of all valid linked urls with no paths or duplicates
     """
     # gets all the links on a site without duplicates
     req = requests.get(url)
     soup = BeautifulSoup(req.content, 'html.parser')
-    links = [ urlunparse(urlparse(link.get('href'))._replace(path='',query='',params='',fragment='')) for link in soup.find_all('a')]
+    if tag_class is not None:
+        links = [ urlunparse(urlparse(link.get('href'))._replace(path='',query='',params='',fragment='')) for link in soup.find_all('a',class_=tag_class)]
+    else:
+        links = [ urlunparse(urlparse(link.get('href'))._replace(path='',query='',params='',fragment='')) for link in soup.find_all('a')]
     no_duplicates = list(OrderedDict.fromkeys(links))
     return [ link for link in no_duplicates if is_valid_url(link) ]
 
 def survey():
     # Get the top 100 most visited sites
     list_url = "https://en.wikipedia.org/wiki/List_of_most-visited_websites"
-    links = get_links(list_url)
+    links = get_links(list_url, "external text")
     csp_evals = dict()
 
     vuln_count = 0
@@ -275,7 +280,8 @@ def survey():
 def main():
     # List of URLs to check, this should be done automatically by fetching the top N most visited sites
     csp_evals, avg_vulns_per_site = survey()
-    print(csp_evals)
+    for url in csp_evals.keys():
+        print(url, csp_evals[url])
     print("Average # of vulns per site: ", avg_vulns_per_site)
 
 if __name__ == "__main__":
