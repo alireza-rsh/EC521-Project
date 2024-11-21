@@ -1,0 +1,10 @@
+http://bbc.com
+https://www.bbc.com/weather
+https://www.bbc.com/newsletters
+https://www.bbc.com/news/live/c20726y20kvt
+https://www.bbc.com/news/live/cm20pye11j3t
+https://www.bbc.com/news
+https://www.bbc.com/travel
+https://www.bbc.com/future/tags/green-tech
+https://cloud.email.bbc.com/techdecoded-newsletter-signup
+https://cloud.email.bbc.com/US_Election_Unspun_newsletter_signup

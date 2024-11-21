@@ -1,0 +1,10 @@
+http://deepl.com
+https://developers.deepl.com/docs
+https://developers.deepl.com/docs/de
+https://developers.deepl.com/docs/es
+https://developers.deepl.com/docs/ja
+https://developers.deepl.com/docs/fr
+https://developers.deepl.com/docs/it
+https://developers.deepl.com/docs/id
+https://developers.deepl.com/docs/ko
+https://developers.deepl.com/docs/nl

@@ -1,0 +1,10 @@
+http://google.com
+https://www.google.com/imghp
+https://www.google.com/services/
+https://policies.google.com/privacy
+https://policies.google.com/terms
+https://www.google.com/preferences
+https://www.google.com/advanced_image_search
+https://policies.google.com/
+https://policies.google.com/technologies
+https://policies.google.com/faq

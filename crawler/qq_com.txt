@@ -1,0 +1,10 @@
+http://qq.com
+https://mail.qq.com/
+https://news.qq.com/
+https://news.qq.com/ch/qa
+https://news.qq.com/ch/finance/
+https://news.qq.com/ch/tech/
+https://news.qq.com/ch/ent/
+https://v.qq.com/
+https://sports.qq.com/
+https://sports.qq.com/nba/index.shtml

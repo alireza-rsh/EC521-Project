@@ -1,0 +1,10 @@
+http://cricbuzz.com
+https://m.cricbuzz.com
+https://m.cricbuzz.com/cricket-schedule/series/all
+https://m.cricbuzz.com/cricket-team
+https://m.cricbuzz.com/profiles
+https://m.cricbuzz.com/cricket-schedule/upcoming-series/international
+https://m.cricbuzz.com/cricket-scorecard-archives
+https://m.cricbuzz.com/cricket-photo-gallery
+https://m.cricbuzz.com/cricket-stats/icc-rankings/men/batting
+https://m.cricbuzz.com/cricket-stats/icc-rankings/women/batting

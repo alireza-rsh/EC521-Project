@@ -1,0 +1,3 @@
+http://office.com
+https://support.office.com/
+https://support.office.com/en-us/

@@ -1,0 +1,10 @@
+http://wikipedia.org
+https://en.wikipedia.org/wiki/List_of_Wikipedia_mobile_applications
+https://en.wikipedia.org/wiki/Main_Page
+https://en.wikipedia.org/wiki/Wikipedia:Contents
+https://en.wikipedia.org/wiki/Portal:Current_events
+https://en.wikipedia.org/wiki/Wikipedia:About
+https://en.wikipedia.org/wiki/Help:Contents
+https://en.wikipedia.org/wiki/Help:Introduction
+https://en.wikipedia.org/wiki/Wikipedia:Community_portal
+https://en.wikipedia.org/wiki/Special:RecentChanges
