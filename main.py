@@ -1,8 +1,10 @@
 import requests
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
-from collections import defaultdict
+from collections import defaultdict, Counter
 import re
+import numpy as np
+import itertools
 
 def fetch_csp(url):
     """
@@ -483,6 +485,287 @@ def report_common_misconfigurations(misconfigurations, directives_misconfigured)
     for directive, count in sorted_directives:
         print(f"{directive}: misconfigured in {count} policies")
 
+def evaluate_csp_versions(csp_policies):
+    csp_versions = {'CSP Level 1': 0, 'CSP Level 2': 0, 'CSP Level 3': 0}
+    advanced_feature_usage = {'nonces': 0, 'hashes': 0, 'strict-dynamic': 0}
+
+    for domain, csp_string in csp_policies.items():
+        csp_version = 'CSP Level 1'  # Default to CSP Level 1
+        uses_nonce = False
+        uses_hash = False
+        uses_strict_dynamic = False
+
+        if csp_string != "No CSP found on this URL." and \
+           csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security." and \
+           csp_string != "Error fetching URL.":
+            csp_dict = parse_csp(csp_string)
+            
+            # Check for CSP Level 2 and Level 3 features
+            csp_level_2_directives = ['child-src', 'form-action', 'frame-ancestors', 'plugin-types', 'report-to']
+            csp_level_3_directives = ['worker-src', 'manifest-src', 'prefetch-src', 'navigate-to']
+
+            directives = csp_dict.keys()
+            # Check for nonces, hashes, and 'strict-dynamic'
+            for directive_name, directive_values in csp_dict.items():
+                # Check for nonces
+                if any(value.startswith("'nonce-") for value in directive_values):
+                    uses_nonce = True
+                # Check for hashes
+                if any(value.startswith(("'sha256-", "'sha384-", "'sha512-")) for value in directive_values):
+                    uses_hash = True
+                # Check for 'strict-dynamic'
+                if "'strict-dynamic'" in directive_values:
+                    uses_strict_dynamic = True
+
+            # Update CSP version based on features
+            if uses_nonce or uses_hash or any(directive in csp_level_2_directives for directive in directives):
+                csp_version = 'CSP Level 2'
+            if uses_strict_dynamic or any(directive in csp_level_3_directives for directive in directives):
+                csp_version = 'CSP Level 3'
+
+            # Update counts
+            csp_versions[csp_version] += 1
+            if uses_nonce:
+                advanced_feature_usage['nonces'] += 1
+            if uses_hash:
+                advanced_feature_usage['hashes'] += 1
+            if uses_strict_dynamic:
+                advanced_feature_usage['strict-dynamic'] += 1
+        else:
+            # Policies without enforced CSP are not counted towards CSP version analysis
+            continue
+
+    return csp_versions, advanced_feature_usage
+
+def report_csp_versions_and_features(csp_versions, advanced_feature_usage):
+    print("\nCSP Version Adoption:")
+    total_policies = sum(csp_versions.values())
+    for version, count in csp_versions.items():
+        percentage = (count / total_policies) * 100 if total_policies > 0 else 0
+        print(f"{version}: {count} policies ({percentage:.2f}%)")
+
+    print("\nAdvanced CSP Features Usage:")
+    for feature, count in advanced_feature_usage.items():
+        percentage = (count / total_policies) * 100 if total_policies > 0 else 0
+        print(f"{feature.replace('-', ' ').capitalize()}: {count} policies ({percentage:.2f}%)")
+
+def evaluate_directive_coverage(csp_policies):
+    """
+    Evaluates which CSP directives are most commonly used and which are often omitted.
+
+    Returns:
+        directive_usage_count (Counter): Counts of each directive across all policies.
+        total_policies (int): Total number of policies analyzed.
+    """
+    directive_usage_count = Counter()
+    total_policies = 0
+
+    for domain, csp_string in csp_policies.items():
+        if csp_string == "No CSP found on this URL." or \
+           csp_string == "The CSP is set to report-only and is not enforced, so it will not affect the page's security." or \
+           csp_string == "Error fetching URL.":
+            continue  # Skip domains without enforced CSP
+
+        csp_dict = parse_csp(csp_string)
+        directives = csp_dict.keys()
+        directive_usage_count.update(directives)
+        total_policies += 1
+
+    return directive_usage_count, total_policies
+
+def report_directive_coverage(directive_usage_count, total_policies):
+    """
+    Reports which CSP directives are most commonly used and which are often omitted.
+
+    Args:
+        directive_usage_count (Counter): Counts of each directive across all policies.
+        total_policies (int): Total number of policies analyzed.
+    """
+    print("\nDirective Coverage Analysis:")
+    print(f"Total policies analyzed: {total_policies}")
+
+    # Calculate the percentage of policies that include each directive
+    directive_percentages = {
+        directive: (count / total_policies) * 100
+        for directive, count in directive_usage_count.items()
+    }
+
+    # Sort directives by usage frequency
+    sorted_directives = sorted(directive_percentages.items(), key=lambda x: x[1], reverse=True)
+
+    print("\nMost Commonly Used Directives:")
+    for directive, percentage in sorted_directives:
+        print(f"{directive}: used in {directive_usage_count[directive]} policies ({percentage:.2f}%)")
+
+    # Identify directives that are often omitted (used in less than 10% of policies)
+    omitted_directives = [
+        (directive, percentage) for directive, percentage in directive_percentages.items() if percentage < 10
+    ]
+
+    if omitted_directives:
+        print("\nDirectives Often Omitted (used in less than 10% of policies):")
+        for directive, percentage in omitted_directives:
+            print(f"{directive}: used in {directive_usage_count[directive]} policies ({percentage:.2f}%)")
+    else:
+        print("\nNo directives were used in less than 10% of policies.")
+
+def csp_dict_to_set(csp_dict):
+    """
+    Converts a CSP dictionary into a set of (directive, value) pairs.
+    """
+    directive_value_pairs = set()
+    for directive, values in csp_dict.items():
+        for value in values:
+            directive_value_pairs.add((directive, value))
+    return directive_value_pairs
+
+def compute_similarity(set_a, set_b):
+    """
+    Computes the Jaccard similarity between two sets.
+    """
+    if not set_a and not set_b:
+        return 1.0  # Both sets are empty; consider them identical
+    intersection = set_a.intersection(set_b)
+    union = set_a.union(set_b)
+    similarity = len(intersection) / len(union)
+    return similarity
+
+def read_urls(file_path):
+    """
+    Reads URLs from a text file.
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        urls = [line.strip() for line in file if line.strip()]
+    return urls
+
+def fetch_csp_policies(urls):
+    """
+    Fetches CSP policies for a list of URLs.
+    """
+    csp_policies = {}
+    for url in urls:
+        print(f"Fetching CSP from {url}")
+        csp_string = fetch_csp(url)
+        csp_policies[url] = csp_string
+    return csp_policies
+
+def parse_and_convert_csp_policies(csp_policies):
+    """
+    Parses CSP policies and converts them to sets of directive-value pairs.
+    """
+    csp_dicts = {}
+    csp_sets = {}
+    for url, csp_string in csp_policies.items():
+        if csp_string and "No CSP found" not in csp_string and "not enforced" not in csp_string:
+            csp_dict = parse_csp(csp_string)
+            csp_dicts[url] = csp_dict
+            csp_sets[url] = csp_dict_to_set(csp_dict)
+        else:
+            csp_dicts[url] = {}
+            csp_sets[url] = set()
+    return csp_dicts, csp_sets
+
+def compute_pairwise_similarities(csp_sets):
+    """
+    Computes pairwise similarities between CSP policies.
+    """
+    urls = list(csp_sets.keys())
+    similarities = []
+    url_pairs = list(itertools.combinations(urls, 2))
+    similarity_matrix = {}
+    for url1, url2 in url_pairs:
+        set1 = csp_sets[url1]
+        set2 = csp_sets[url2]
+        similarity = compute_similarity(set1, set2)
+        similarities.append(similarity)
+        similarity_matrix[(url1, url2)] = similarity
+        print(f"Similarity between {url1} and {url2}: {similarity:.4f}")
+    return similarities, similarity_matrix
+
+def calculate_overall_consistency(similarities):
+    """
+    Calculates the overall consistency metric.
+    """
+    if similarities:
+        overall_consistency = sum(similarities) / len(similarities)
+    else:
+        overall_consistency = 1.0  # Only one page or no pairwise comparisons possible
+    print(f"\nOverall Consistency Metric: {overall_consistency:.4f}")
+    return overall_consistency
+
+def identify_misconfigurations(urls):
+    """
+    Identifies misconfigurations in the CSP policies of URLs.
+    """
+    misconfigurations = {}
+    for url in urls:
+        issues = eval_csp(url)
+        misconfigurations[url] = issues
+    return misconfigurations
+
+def compare_misconfigurations(misconfigurations):
+    """
+    Compares the number of misconfigurations between the main page and subpages.
+    """
+    urls = list(misconfigurations.keys())
+    main_page_url = urls[0]
+    main_page_issues = misconfigurations.get(main_page_url, [])
+    subpages_urls = urls[1:]
+    subpages_issues_counts = [len(misconfigurations.get(url, [])) for url in subpages_urls]
+    if subpages_issues_counts:
+        average_subpage_misconfigs = sum(subpages_issues_counts) / len(subpages_issues_counts)
+    else:
+        average_subpage_misconfigs = 0
+
+    print(f"\nMain page ({main_page_url}) misconfigurations: {len(main_page_issues)}")
+    print(f"Average subpage misconfigurations: {average_subpage_misconfigs:.2f}")
+
+    if len(main_page_issues) < average_subpage_misconfigs:
+        misconfig_comparison = "Subpages have more misconfigurations than the main page."
+    elif len(main_page_issues) > average_subpage_misconfigs:
+        misconfig_comparison = "Subpages have fewer misconfigurations than the main page."
+    else:
+        misconfig_comparison = "Subpages have the same number of misconfigurations as the main page."
+
+    print(misconfig_comparison)
+    return misconfig_comparison
+
+def analyze_csp_consistency():
+    """
+    Analyzes the CSP consistency across multiple pages.
+    """
+    urls = read_urls('test.txt')
+    
+    # Fetch CSP Policies
+    csp_policies = fetch_csp_policies(urls)
+
+    # Parse and Convert CSP Policies
+    csp_dicts, csp_sets = parse_and_convert_csp_policies(csp_policies)
+
+    # Compute Pairwise Similarities
+    similarities, similarity_matrix = compute_pairwise_similarities(csp_sets)
+
+    # Calculate Overall Consistency Metric
+    overall_consistency = calculate_overall_consistency(similarities)
+
+    # Identify Misconfigurations
+    misconfigurations = identify_misconfigurations(urls)
+
+    # Compare Misconfigurations Between Main Page and Subpages
+    misconfig_comparison = compare_misconfigurations(misconfigurations)
+
+    # Return results
+    results = {
+        'overall_consistency': overall_consistency,
+        'similarity_matrix': similarity_matrix,
+        'misconfigurations': misconfigurations,
+        'misconfig_comparison': misconfig_comparison
+    }
+    print(f"\nOverall Consistency Metric: {results['overall_consistency']:.4f}")
+
+    # Print Misconfiguration Comparison
+    print(results['misconfig_comparison'])
+
 def main():
     # List of URLs to check, this should be done automatically by fetching the top N most visited sites
     #analyze_csp_prevalence()
@@ -492,16 +775,29 @@ def main():
         domains = [line.strip() for line in file if line.strip()]
 
     # Step 1: Collect CSP Policies
-    csp_policies = collect_csp_policies(domains)
+    #csp_policies = collect_csp_policies(domains)
 
     # Step 2: Evaluate CSP Policies
-    misconfigurations, directives_misconfigured, domain_issues = eval_csp_v2(csp_policies)
+    #misconfigurations, directives_misconfigured, domain_issues = eval_csp_v2(csp_policies)
 
     # Step 3: Report Findings
-    report_common_misconfigurations(misconfigurations, directives_misconfigured)
-    print("-----------------------------------------------------------------------------------------")
+    #report_common_misconfigurations(misconfigurations, directives_misconfigured)
+    #print("-----------------------------------------------------------------------------------------")
     # Analyze CSP prevalence
-    analyze_csp_prevalence(csp_policies)
+    #analyze_csp_prevalence(csp_policies)
+    
+    # Evaluate CSP Versions and Advanced Features
+    #csp_versions, advanced_feature_usage = evaluate_csp_versions(csp_policies)
+
+    # Report CSP Versions and Advanced Features
+    #report_csp_versions_and_features(csp_versions, advanced_feature_usage)
+    
+    # Evaluate Directive Coverage
+    #directive_usage_count, total_policies = evaluate_directive_coverage(csp_policies)
+
+    # Report Directive Coverage
+    #report_directive_coverage(directive_usage_count, total_policies)
+    analyze_csp_consistency()
 
 if __name__ == "__main__":
     main()

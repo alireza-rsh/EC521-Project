@@ -1,0 +1,10 @@
+google.com
+youtube.com
+facebook.com
+wikipedia.org
+instagram.com
+reddit.com
+bing.com
+taboola.com
+x.com
+yelp.com
