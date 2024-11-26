@@ -5,6 +5,7 @@ from collections import defaultdict, Counter
 import re
 import numpy as np
 import itertools
+import matplotlib.pyplot as plt
 
 def fetch_csp(url):
     """
@@ -43,7 +44,7 @@ def fetch_csp(url):
 
     except requests.RequestException as e:
         print(f"Error fetching URL: {e}")
-        return ""
+        return "Error fetching URL."
 
 def parse_csp(csp_string):
     """
@@ -325,7 +326,7 @@ def eval_csp(url):
     issues = []
     csp_string = fetch_csp(url)
     csp_dict = []
-    if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
+    if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security." and csp_string != "Error fetching URL.":
         csp_dict = parse_csp(csp_string)
         csp_dict = apply_default_src(csp_dict, issues)
         if 'script-src' in csp_dict:
@@ -354,7 +355,7 @@ def eval_csp(url):
         if 'frame-src' in csp_dict:
             frame_src_values = csp_dict['frame-src']
             frame_src_check(frame_src_values, issues)
-    else:
+    elif(csp_string == "No CSP found on this URL." or csp_string == "The CSP is set to report-only and is not enforced, so it will not affect the page's security."):
         issues.append(csp_string)
     return issues
 
@@ -401,6 +402,29 @@ def analyze_csp_prevalence(csp_policies):
     print(f"Sites with no CSP: {no_csp_count} ({no_csp_percentage:.2f}%)")
     if error_count > 0:
         print(f"Sites with errors during fetching: {error_count}")
+    categories = ["Enforced CSP", "Report-Only CSP", "No CSP"]
+    counts = [enforced_csp_count, report_only_csp_count, no_csp_count]
+    colors = ["#1f77b4", "#ff7f0e", "#d62728"]  # Custom colors
+
+    # Create the bar chart
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(categories, counts, color=colors, edgecolor="black")
+
+    # Add labels to each bar
+    for bar in bars:
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() - 5,
+                str(bar.get_height()), ha="center", va="bottom", fontsize=12, color="white")
+
+    # Add titles and labels
+    plt.title("CSP Implementation Analysis (Counts)", fontsize=16, fontweight="bold")
+    plt.xlabel("CSP Implementation", fontsize=12)
+    plt.ylabel("Number of Sites", fontsize=12)
+
+    # Show grid for better readability
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    plt.tight_layout()
+    plt.show()
 
 def collect_csp_policies(domains):
     csp_policies = {}
@@ -431,7 +455,7 @@ def eval_csp_v2(csp_policies):
     domain_issues = {}
     for domain, csp_string in csp_policies.items():
         issues = []
-        if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security.":
+        if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security." and csp_string != "Error fetching URL.":
             csp_dict = parse_csp(csp_string)
             csp_dict = apply_default_src(csp_dict, issues)
             if 'script-src' in csp_dict:
@@ -466,7 +490,7 @@ def eval_csp_v2(csp_policies):
                 # If issues related to the directive exist, increment its misconfiguration count
                 if any(directive in issue for issue in issues):
                     directives_misconfigured[directive] += 1
-        else:
+        elif(csp_string == "No CSP found on this URL." or csp_string == "The CSP is set to report-only and is not enforced, so it will not affect the page's security."):
             issues.append(csp_string)
             misconfigurations[csp_string] += 1
         domain_issues[domain] = issues
@@ -475,15 +499,34 @@ def eval_csp_v2(csp_policies):
 def report_common_misconfigurations(misconfigurations, directives_misconfigured):
     # Sort misconfigurations by frequency
     sorted_misconfigurations = sorted(misconfigurations.items(), key=lambda x: x[1], reverse=True)
+    issues, issue_counts = zip(*sorted_misconfigurations)
     print("\nMost Common CSP Misconfigurations:")
     for issue, count in sorted_misconfigurations:
         print(f"{issue}: {count} occurrences")
-
+    plt.figure(figsize=(15, len(issues) * 0.8))
+    plt.barh(issues, issue_counts, color="#1f77b4", edgecolor="black")
+    plt.gca().invert_yaxis()  # Invert Y-axis for better readability
+    plt.title("Most Common CSP Misconfigurations", fontsize=16, fontweight="bold")
+    plt.xlabel("Number of Occurrences", fontsize=12)
+    plt.ylabel("Misconfiguration Issues", fontsize=12)
+    plt.grid(axis="x", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.show()
     # Sort directives by frequency of misconfiguration
     sorted_directives = sorted(directives_misconfigured.items(), key=lambda x: x[1], reverse=True)
+    directives, directive_counts = zip(*sorted_directives)
     print("\nDirectives Most Frequently Misconfigured:")
     for directive, count in sorted_directives:
         print(f"{directive}: misconfigured in {count} policies")
+    plt.figure(figsize=(10, 6))
+    plt.barh(directives, directive_counts, color="#ff7f0e", edgecolor="black")
+    plt.gca().invert_yaxis()  # Invert Y-axis for better readability
+    plt.title("Directives Most Frequently Misconfigured", fontsize=16, fontweight="bold")
+    plt.xlabel("Number of Policies", fontsize=12)
+    plt.ylabel("Directives", fontsize=12)
+    plt.grid(axis="x", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_csp_versions(csp_policies):
     csp_versions = {'CSP Level 1': 0, 'CSP Level 2': 0, 'CSP Level 3': 0}
@@ -543,11 +586,42 @@ def report_csp_versions_and_features(csp_versions, advanced_feature_usage):
     for version, count in csp_versions.items():
         percentage = (count / total_policies) * 100 if total_policies > 0 else 0
         print(f"{version}: {count} policies ({percentage:.2f}%)")
+    
+    versions = list(csp_versions.keys())
+    version_counts = list(csp_versions.values())
+    version_percentages = [(count / total_policies) * 100 if total_policies > 0 else 0 for count in version_counts]
 
+    plt.figure(figsize=(8, 6))
+    wedges, texts, autotexts = plt.pie(version_percentages, labels=versions, autopct="%1.1f%%", startangle=140,
+                                       textprops={'fontsize': 12}, colors=["#1f77b4", "#ff7f0e", "#2ca02c"])
+    plt.title("CSP Version Adoption", fontsize=16, fontweight="bold")
+    plt.tight_layout()
+    plt.show()
+    
     print("\nAdvanced CSP Features Usage:")
     for feature, count in advanced_feature_usage.items():
         percentage = (count / total_policies) * 100 if total_policies > 0 else 0
         print(f"{feature.replace('-', ' ').capitalize()}: {count} policies ({percentage:.2f}%)")
+    
+    features = [feature.replace('-', ' ').capitalize() for feature in advanced_feature_usage.keys()]
+    feature_counts = list(advanced_feature_usage.values())
+    feature_percentages = [(count / total_policies) * 100 if total_policies > 0 else 0 for count in feature_counts]
+
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(features, feature_percentages, color="#ff7f0e", edgecolor="black")
+    plt.title("Advanced CSP Features Usage", fontsize=16, fontweight="bold")
+    plt.xlabel("Features", fontsize=12)
+    plt.ylabel("Percentage of Policies (%)", fontsize=12)
+    plt.xticks(rotation=45, fontsize=10, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Add values above bars
+    for bar, percentage in zip(bars, feature_percentages):
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5, f"{percentage:.1f}%", 
+                 ha="center", va="bottom", fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_directive_coverage(csp_policies):
     """
@@ -608,6 +682,47 @@ def report_directive_coverage(directive_usage_count, total_policies):
             print(f"{directive}: used in {directive_usage_count[directive]} policies ({percentage:.2f}%)")
     else:
         print("\nNo directives were used in less than 10% of policies.")
+    
+    # Visualization for Most Commonly Used Directives
+    directives, percentages = zip(*sorted_directives)
+    counts = [directive_usage_count[directive] for directive in directives]
+
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(directives, percentages, color="#1f77b4", edgecolor="black")
+    plt.title("Most Commonly Used CSP Directives", fontsize=16, fontweight="bold")
+    plt.xlabel("Directives", fontsize=12)
+    plt.ylabel("Percentage of Policies (%)", fontsize=12)
+    plt.xticks(rotation=45, fontsize=10, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Add values above bars
+    for bar, percentage in zip(bars, percentages):
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5, f"{percentage:.1f}%", 
+                 ha="center", va="bottom", fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+
+    # Visualization for Omitted Directives (if any)
+    if omitted_directives:
+        omitted_directives, omitted_percentages = zip(*omitted_directives)
+        omitted_counts = [directive_usage_count[directive] for directive in omitted_directives]
+
+        plt.figure(figsize=(12, 6))
+        bars = plt.bar(omitted_directives, omitted_percentages, color="#d62728", edgecolor="black")
+        plt.title("Directives Often Omitted (Less than 10% Usage)", fontsize=16, fontweight="bold")
+        plt.xlabel("Directives", fontsize=12)
+        plt.ylabel("Percentage of Policies (%)", fontsize=12)
+        plt.xticks(rotation=45, fontsize=10, ha="right")
+        plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Add values above bars
+        for bar, percentage in zip(bars, omitted_percentages):
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5, f"{percentage:.1f}%", 
+                     ha="center", va="bottom", fontsize=10)
+
+        plt.tight_layout()
+        plt.show()
 
 def csp_dict_to_set(csp_dict):
     """
@@ -774,30 +889,32 @@ def main():
     with open(domains_file, 'r', encoding='utf-8') as file:
         domains = [line.strip() for line in file if line.strip()]
 
-    # Step 1: Collect CSP Policies
-    #csp_policies = collect_csp_policies(domains)
+    #Step 1: Collect CSP Policies
+    csp_policies = collect_csp_policies(domains)
+    
+    # Analyze CSP prevalence
+    analyze_csp_prevalence(csp_policies)
 
     # Step 2: Evaluate CSP Policies
-    #misconfigurations, directives_misconfigured, domain_issues = eval_csp_v2(csp_policies)
+    misconfigurations, directives_misconfigured, domain_issues = eval_csp_v2(csp_policies)
 
     # Step 3: Report Findings
-    #report_common_misconfigurations(misconfigurations, directives_misconfigured)
+    report_common_misconfigurations(misconfigurations, directives_misconfigured)
     #print("-----------------------------------------------------------------------------------------")
-    # Analyze CSP prevalence
-    #analyze_csp_prevalence(csp_policies)
+
     
     # Evaluate CSP Versions and Advanced Features
-    #csp_versions, advanced_feature_usage = evaluate_csp_versions(csp_policies)
+    csp_versions, advanced_feature_usage = evaluate_csp_versions(csp_policies)
 
     # Report CSP Versions and Advanced Features
-    #report_csp_versions_and_features(csp_versions, advanced_feature_usage)
+    report_csp_versions_and_features(csp_versions, advanced_feature_usage)
     
     # Evaluate Directive Coverage
-    #directive_usage_count, total_policies = evaluate_directive_coverage(csp_policies)
+    directive_usage_count, total_policies = evaluate_directive_coverage(csp_policies)
 
     # Report Directive Coverage
-    #report_directive_coverage(directive_usage_count, total_policies)
-    analyze_csp_consistency()
+    report_directive_coverage(directive_usage_count, total_policies)
+    #analyze_csp_consistency()
 
 if __name__ == "__main__":
     main()
