@@ -9,6 +9,7 @@ https://platform.openai.com/
 https://openai.com/careers/
 https://openai.com/about/
 https://openai.com/charter/
+https://openai.com/o1/
 https://openai.com/api/
 https://openai.com/devday/
 https://openai.com/residency/
@@ -39,7 +40,6 @@ https://openai.com/index/critiques/
 https://openai.com/index/klarna/
 https://openai.com/index/paradigm/
 https://openai.com/index/glow/
-https://openai.com/devday/directory/
 https://openai.com/news/research/
 https://openai.com/index/jukebox/
 https://openai.com/index/duolingo/
@@ -67,7 +67,6 @@ https://openai.com/index/triton/
 https://openai.com/contact-sales/
 https://community.openai.com/faq
 https://openai.com/chatgpt/download/
-https://openai.com/leads/startup/
 https://openai.com/waitlist/plugins/
 https://privacy.openai.com/policies
 https://help.openai.com/en/
@@ -84,6 +83,7 @@ https://cookbook.openai.com/examples/embedding_long_inputs
 https://openai.com/policies/cookie-policy/
 https://openai.com/index/openai-lp/
 https://cookbook.openai.com/articles/how_to_work_with_large_language_models
+https://openai.com/contributions/gpt-4/
 https://cookbook.openai.com/examples/batch_processing
 https://cookbook.openai.com/examples/fine_tuning_for_function_calling
 https://platform.openai.com/docs/changelog
@@ -91,10 +91,10 @@ https://openai.com/index/openai-supporters/
 https://openai.com/index/dota-2/
 https://openai.com/index/gpt-4/
 https://openai.com/policies/usage-policies/
+https://openai.com/index/spring-update/
 https://openai.com/index/learning-dexterity/
-https://openai.com/index/estee-lauder/
+https://platform.openai.com/docs/libraries
 https://openai.com/index/mercado-libre/
 https://openai.com/index/arco-education/
 https://openai.com/form/custom-models/
 https://openai.com/index/codex-apps/
-https://cookbook.openai.com/examples/assistants_api_overview_python

@@ -4,7 +4,7 @@ from googlesearch import search
 import os
 
 # Input file with domains
-domains_file = "domain4.txt"
+domains_file = "domain10.txt"
 output_dir = "google_results"
 
 # Create the output directory if it doesn't exist
