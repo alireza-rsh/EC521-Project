@@ -430,7 +430,9 @@ def analyze_csp_prevalence(csp_policies):
     plt.grid(axis="y", linestyle="--", alpha=0.7)
 
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "analyze_csp_prevalence.png")
+    plt.savefig(plot)
+    plt.close()
 
 def collect_csp_policies(domains):
     csp_policies = {}
@@ -517,7 +519,9 @@ def report_common_misconfigurations(misconfigurations, directives_misconfigured)
     plt.ylabel("Misconfiguration Issues", fontsize=12)
     plt.grid(axis="x", linestyle="--", alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "Most_Common_CSP_Issues.png")
+    plt.savefig(plot)
+    plt.close()
     # Sort directives by frequency of misconfiguration
     sorted_directives = sorted(directives_misconfigured.items(), key=lambda x: x[1], reverse=True)
     directives, directive_counts = zip(*sorted_directives)
@@ -532,7 +536,9 @@ def report_common_misconfigurations(misconfigurations, directives_misconfigured)
     plt.ylabel("Directives", fontsize=12)
     plt.grid(axis="x", linestyle="--", alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "Directives_Most_Frequently_Misconfigured.png")
+    plt.savefig(plot)
+    plt.close()
 
 def evaluate_csp_versions(csp_policies):
     csp_versions = {'CSP Level 1': 0, 'CSP Level 2': 0, 'CSP Level 3': 0}
@@ -602,7 +608,9 @@ def report_csp_versions_and_features(csp_versions, advanced_feature_usage):
                                        textprops={'fontsize': 12}, colors=["#1f77b4", "#ff7f0e", "#2ca02c"])
     plt.title("CSP Version Adoption", fontsize=16, fontweight="bold")
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "CSP_Version.png")
+    plt.savefig(plot)
+    plt.close()
     
     print("\nAdvanced CSP Features Usage:")
     for feature, count in advanced_feature_usage.items():
@@ -627,7 +635,9 @@ def report_csp_versions_and_features(csp_versions, advanced_feature_usage):
                  ha="center", va="bottom", fontsize=10)
 
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "CSP_Advanced_Features.png")
+    plt.savefig(plot)
+    plt.close()
 
 def evaluate_directive_coverage(csp_policies):
     """
@@ -707,7 +717,9 @@ def report_directive_coverage(directive_usage_count, total_policies):
                  ha="center", va="bottom", fontsize=10)
 
     plt.tight_layout()
-    plt.show()
+    plot = os.path.join(".", "Most_commonly_used_directives.png")
+    plt.savefig(plot)
+    plt.close()
 
     # Visualization for Omitted Directives (if any)
     if omitted_directives:
@@ -728,7 +740,9 @@ def report_directive_coverage(directive_usage_count, total_policies):
                      ha="center", va="bottom", fontsize=10)
 
         plt.tight_layout()
-        plt.show()
+        plot = os.path.join(".", "Omitted_directives.png")
+        plt.savefig(plot)
+        plt.close()
 
 def csp_dict_to_set(csp_dict):
     """
@@ -994,7 +1008,7 @@ def visualize_results(domain_results, output_dir="."):
     plt.close()
     print(f"Domain classification plot saved at: {classification_plot_path}")
 
-def main2():
+def main():
     # List of URLs to check, this should be done automatically by fetching the top N most visited sites
     #analyze_csp_prevalence()
     domains_file = '100MostVisitedSites.txt'
@@ -1026,7 +1040,7 @@ def main2():
     # Report Directive Coverage
     report_directive_coverage(directive_usage_count, total_policies)
     
-def main():
+def main2():
     domain_results = process_directory("./crawler/google_results")
     visualize_results(domain_results)
     
