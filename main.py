@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 from collections import defaultdict, Counter
 import re
+import os
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
@@ -19,8 +20,14 @@ def fetch_csp(url):
         str: The raw CSP string if enforced, or a message if only report-only is found.
     """
     try:
+        headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        )
+        }
         # Send request to the URL
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         # Try to get CSP from headers
         csp_header = response.headers.get('Content-Security-Policy', '')
@@ -322,9 +329,8 @@ def apply_default_src(csp_dict, issues):
 
     return csp_dict
 
-def eval_csp(url):
+def eval_csp(csp_string):
     issues = []
-    csp_string = fetch_csp(url)
     csp_dict = []
     if csp_string != "No CSP found on this URL." and csp_string != "The CSP is set to report-only and is not enforced, so it will not affect the page's security." and csp_string != "Error fetching URL.":
         csp_dict = parse_csp(csp_string)
@@ -355,7 +361,7 @@ def eval_csp(url):
         if 'frame-src' in csp_dict:
             frame_src_values = csp_dict['frame-src']
             frame_src_check(frame_src_values, issues)
-    elif(csp_string == "No CSP found on this URL." or csp_string == "The CSP is set to report-only and is not enforced, so it will not affect the page's security."):
+    else:
         issues.append(csp_string)
     return issues
 
@@ -759,7 +765,7 @@ def fetch_csp_policies(urls):
     """
     csp_policies = {}
     for url in urls:
-        print(f"Fetching CSP from {url}")
+        #print(f"Fetching CSP from {url}")
         csp_string = fetch_csp(url)
         csp_policies[url] = csp_string
     return csp_policies
@@ -767,24 +773,43 @@ def fetch_csp_policies(urls):
 def parse_and_convert_csp_policies(csp_policies):
     """
     Parses CSP policies and converts them to sets of directive-value pairs.
+    Handles pages with no CSP or report-only CSP.
     """
     csp_dicts = {}
     csp_sets = {}
     for url, csp_string in csp_policies.items():
-        if csp_string and "No CSP found" not in csp_string and "not enforced" not in csp_string:
-            csp_dict = parse_csp(csp_string)
-            csp_dicts[url] = csp_dict
-            csp_sets[url] = csp_dict_to_set(csp_dict)
+        if csp_string and "Error fetching URL." not in csp_string:
+            if "No CSP found on this URL." in csp_string or "The CSP is set to report-only" in csp_string:
+                # Handle pages with no CSP or report-only CSP
+                csp_dicts[url] = "No CSP or Report-Only CSP"
+                csp_sets[url] = {"No CSP or Report-Only CSP"}
+            else:
+                # Parse valid CSPs
+                csp_dict = parse_csp(csp_string)
+                csp_dicts[url] = csp_dict
+                csp_sets[url] = csp_dict_to_set(csp_dict)
         else:
-            csp_dicts[url] = {}
+            # Error fetching URL
+            csp_dicts[url] = "Error"
             csp_sets[url] = set()
     return csp_dicts, csp_sets
+
+def compute_identical_policies(csp_dicts):
+    """
+    Determines how many pages have identical CSP policies.
+    """
+    csp_strings = [str(csp_dict) for csp_dict in csp_dicts.values() if csp_dict != "Error"]
+    unique_policies = set(csp_strings)
+    identical_count = len(csp_strings) - len(unique_policies)
+
+    #print(f"\nNumber of identical CSP policies: {identical_count}")
+    return identical_count
 
 def compute_pairwise_similarities(csp_sets):
     """
     Computes pairwise similarities between CSP policies.
     """
-    urls = list(csp_sets.keys())
+    urls = [url for url in csp_sets.keys() if csp_sets[url] != set()]
     similarities = []
     url_pairs = list(itertools.combinations(urls, 2))
     similarity_matrix = {}
@@ -794,7 +819,7 @@ def compute_pairwise_similarities(csp_sets):
         similarity = compute_similarity(set1, set2)
         similarities.append(similarity)
         similarity_matrix[(url1, url2)] = similarity
-        print(f"Similarity between {url1} and {url2}: {similarity:.4f}")
+        #print(f"Similarity between {url1} and {url2}: {similarity:.4f}")
     return similarities, similarity_matrix
 
 def calculate_overall_consistency(similarities):
@@ -805,7 +830,7 @@ def calculate_overall_consistency(similarities):
         overall_consistency = sum(similarities) / len(similarities)
     else:
         overall_consistency = 1.0  # Only one page or no pairwise comparisons possible
-    print(f"\nOverall Consistency Metric: {overall_consistency:.4f}")
+    #print(f"\nOverall Consistency Metric: {overall_consistency:.10f}")
     return overall_consistency
 
 def identify_misconfigurations(urls):
@@ -815,6 +840,8 @@ def identify_misconfigurations(urls):
     misconfigurations = {}
     for url in urls:
         issues = eval_csp(url)
+        if "Error fetching URL." in issues :
+            continue
         misconfigurations[url] = issues
     return misconfigurations
 
@@ -834,7 +861,6 @@ def compare_misconfigurations(misconfigurations):
 
     print(f"\nMain page ({main_page_url}) misconfigurations: {len(main_page_issues)}")
     print(f"Average subpage misconfigurations: {average_subpage_misconfigs:.2f}")
-
     if len(main_page_issues) < average_subpage_misconfigs:
         misconfig_comparison = "Subpages have more misconfigurations than the main page."
     elif len(main_page_issues) > average_subpage_misconfigs:
@@ -845,17 +871,22 @@ def compare_misconfigurations(misconfigurations):
     print(misconfig_comparison)
     return misconfig_comparison
 
-def analyze_csp_consistency():
+def analyze_csp_consistency(file_path):
     """
     Analyzes the CSP consistency across multiple pages.
     """
-    urls = read_urls('test.txt')
+    # Read URLs from the file
+    with open(file_path, 'r') as f:
+        urls = [line.strip() for line in f if line.strip()]
     
     # Fetch CSP Policies
     csp_policies = fetch_csp_policies(urls)
 
     # Parse and Convert CSP Policies
     csp_dicts, csp_sets = parse_and_convert_csp_policies(csp_policies)
+    
+    # Compute Identical Policies
+    identical_count = compute_identical_policies(csp_dicts)
 
     # Compute Pairwise Similarities
     similarities, similarity_matrix = compute_pairwise_similarities(csp_sets)
@@ -864,7 +895,10 @@ def analyze_csp_consistency():
     overall_consistency = calculate_overall_consistency(similarities)
 
     # Identify Misconfigurations
-    misconfigurations = identify_misconfigurations(urls)
+    misconfigurations = {}
+    for url, csp_string in csp_policies.items():
+        if csp_string != "Error fetching URL." :
+            misconfigurations[url] = eval_csp(csp_string)
 
     # Compare Misconfigurations Between Main Page and Subpages
     misconfig_comparison = compare_misconfigurations(misconfigurations)
@@ -874,14 +908,93 @@ def analyze_csp_consistency():
         'overall_consistency': overall_consistency,
         'similarity_matrix': similarity_matrix,
         'misconfigurations': misconfigurations,
-        'misconfig_comparison': misconfig_comparison
+        'misconfig_comparison': misconfig_comparison,
+        'identical_policies': identical_count
     }
     print(f"\nOverall Consistency Metric: {results['overall_consistency']:.4f}")
-
+    print(f"Number of identical CSP policies: {results['identical_policies']}")
     # Print Misconfiguration Comparison
     print(results['misconfig_comparison'])
+    return results
 
-def main():
+def process_directory(directory_path):
+    """
+    Processes all .txt files in a directory and performs CSP analysis for each domain.
+    """
+    domain_results = {}
+    for filename in os.listdir(directory_path):
+        if filename.endswith('.txt'):
+            domain = filename.replace('.txt', '')  # Use the filename as the domain
+            file_path = os.path.join(directory_path, filename)
+            print(f"Processing domain: {domain}")
+            domain_results[domain] = analyze_csp_consistency(file_path)
+    return domain_results
+
+def visualize_results(domain_results, output_dir="."):
+    """
+    Visualizes overall consistency and misconfiguration comparisons for all domains
+    and saves the plots in the specified directory.
+
+    Args:
+        domain_results (dict): Analysis results for each domain.
+        output_dir (str): Directory to save the plots.
+    """
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Prepare data for visualization
+    domains = list(domain_results.keys())
+    #print(domain_results["cnn.com"]['misconfigurations'])
+    consistencies = [domain_results[domain]['overall_consistency'] for domain in domains]
+    #misconfig_counts = [len(domain_results[domain]['misconfigurations'][domains[0]]) for domain in domains]
+
+    # Visualize Overall Consistency
+    consistency_plot_path = os.path.join(output_dir, "overall_consistency.png")
+    plt.figure(figsize=(20, 6))
+    plt.bar(domains, consistencies, color='blue', edgecolor='black')
+    plt.title("Overall Consistency Across Domains", fontsize=16, fontweight="bold")
+    plt.xlabel("Domains", fontsize=12)
+    plt.ylabel("Consistency Metric", fontsize=12)
+    plt.xticks(rotation=90, ha='center', fontsize=8)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.savefig(consistency_plot_path)  # Save the plot
+    plt.close()  # Close the plot to free memory
+    print(f"Overall consistency plot saved at: {consistency_plot_path}")
+
+    # Visualize Misconfiguration Counts
+    more_issues = []
+    fewer_issues = []
+    same_issues = []
+
+    for domain, results in domain_results.items():
+        misconfig_comparison = results.get("misconfig_comparison", "")
+        if "Subpages have more misconfigurations" in misconfig_comparison:
+            more_issues.append(domain)
+        elif "Subpages have fewer misconfigurations" in misconfig_comparison:
+            fewer_issues.append(domain)
+        elif "Subpages have the same number of misconfigurations" in misconfig_comparison:
+            same_issues.append(domain)
+
+    # Visualize classified domains
+    labels = ["Subpages > Main Page", "Subpages < Main Page", "Subpages = Main Page"]
+    counts = [len(more_issues), len(fewer_issues), len(same_issues)]
+
+    plt.figure(figsize=(8, 6))
+    plt.bar(labels, counts, color=['red', 'green', 'blue'], edgecolor='black')
+    plt.title("Comparison of Misconfigurations: Subpages vs. Main Page", fontsize=16, fontweight="bold")
+    plt.xlabel("Comparison (Subpages vs. Main Page)", fontsize=12)
+    plt.ylabel("Number of Domains", fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    # Save the plot
+    classification_plot_path = os.path.join(output_dir, "domain_classification.png")
+    plt.savefig(classification_plot_path)
+    plt.close()
+    print(f"Domain classification plot saved at: {classification_plot_path}")
+
+def main2():
     # List of URLs to check, this should be done automatically by fetching the top N most visited sites
     #analyze_csp_prevalence()
     domains_file = '100MostVisitedSites.txt'
@@ -900,8 +1013,6 @@ def main():
 
     # Step 3: Report Findings
     report_common_misconfigurations(misconfigurations, directives_misconfigured)
-    #print("-----------------------------------------------------------------------------------------")
-
     
     # Evaluate CSP Versions and Advanced Features
     csp_versions, advanced_feature_usage = evaluate_csp_versions(csp_policies)
@@ -914,7 +1025,10 @@ def main():
 
     # Report Directive Coverage
     report_directive_coverage(directive_usage_count, total_policies)
-    #analyze_csp_consistency()
-
+    
+def main():
+    domain_results = process_directory("./crawler/google_results")
+    visualize_results(domain_results)
+    
 if __name__ == "__main__":
     main()
